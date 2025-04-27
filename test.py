@@ -213,3 +213,58 @@ def generate_summary_report(subtype_patterns, output_dir):
             f.write("\n")
     
     print(f"已生成汇总报告: {report_file}")
+
+
+
+def main():
+    model_path = "/root/autodl-tmp/ViraLM/DNABERT2_new_class10_virus_classification_model"
+    test_fasta_file = "./data/data/class_10_new/test_sequences_10.fasta"
+    test_label_file = "./data/data/class_10_new/test_labels_10.csv"
+    output_dir = "./feature_importance_results_window"
+    target_subtypes = ['H5N1',"H5N8","H13N6"]
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"使用设备: {device}")
+    
+    print("加载模型和tokenizer...")
+    config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
+    model = AutoModelForSequenceClassification.from_pretrained(
+        model_path,
+        config=config,
+        trust_remote_code=True
+    ).to(device)
+    tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+    
+    print("加载测试数据...")
+    sequences, labels, seq_ids, label_to_idx = load_data(test_fasta_file, test_label_file)
+    
+    test_sequences = []
+    test_labels = []
+    test_seq_ids = []
+    processed_subtypes = set()
+    
+    for i, (sequence, label, seq_id) in enumerate(zip(sequences, labels, seq_ids)):
+        subtype = [k for k, v in label_to_idx.items() if v == label][0]
+        if subtype in target_subtypes and subtype not in processed_subtypes:
+            test_sequences.append(sequence)
+            test_labels.append(label)
+            test_seq_ids.append(seq_id)
+            processed_subtypes.add(subtype)
+            print(f"选择亚型 {subtype} 的测试序列: {seq_id}")
+        
+        if len(processed_subtypes) == len(target_subtypes):
+            break
+    
+    print("\n开始特征重要性分析...")
+    model.eval()
+    subtype_patterns = analyze_sequences(
+        test_sequences, test_labels, test_seq_ids,
+        model, tokenizer, label_to_idx,
+        output_dir, device
+    )
+    
+    generate_summary_report(subtype_patterns, output_dir)
+    print("分析完成！")
+
+if __name__ == "__main__":
+    main()
