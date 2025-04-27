@@ -1,3 +1,13 @@
+import os
+import torch
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from Bio import SeqIO
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoConfig
+from tqdm import tqdm
+
 def load_data(fasta_file, label_file, existing_label_to_idx=None):
     """加载序列数据和标签"""
     sequences = []
