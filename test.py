@@ -238,7 +238,7 @@ def main():
     test_fasta_file = "./data/data/class_10_new/test_sequences_10.fasta"
     test_label_file = "./data/data/class_10_new/test_labels_10.csv"
     output_dir = "./feature_importance_results_window_test"
-    target_subtypes = ['H5N1',"H5N8","H13N6"]
+    target_subtypes = ['H5N1']
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"使用设备: {device}")
