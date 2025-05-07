@@ -10,11 +10,11 @@ from tqdm import tqdm
 
 
 plt.rcParams['font.family'] = 'DejaVu Sans'
-plt.rcParams['font.size'] = 22 
-plt.rcParams['axes.titlesize'] = 22 
-plt.rcParams['axes.labelsize'] = 22 
-plt.rcParams['xtick.labelsize'] = 22 
-plt.rcParams['ytick.labelsize'] = 22
+plt.rcParams['font.size'] = 28 
+plt.rcParams['axes.titlesize'] = 28
+plt.rcParams['axes.labelsize'] = 28
+plt.rcParams['xtick.labelsize'] = 28
+plt.rcParams['ytick.labelsize'] = 28
 plt.rcParams['figure.dpi'] = 800 
 
 
@@ -103,7 +103,7 @@ def analyze_feature_importance(model, sequence, tokenizer, label_idx, device, wi
 
 def visualize_importance(sequence, window_importance, seq_id, subtype, output_dir, window_size=5):
     """可视化窗口重要性分布"""
-    plt.figure(figsize=(20, 6))
+    plt.figure(figsize=(26, 6))
     # 创建热图
     importance_matrix = window_importance.reshape(1, -1)
     sns.heatmap(
@@ -115,14 +115,14 @@ def visualize_importance(sequence, window_importance, seq_id, subtype, output_di
     )
     
     plt.title(f"Window Importance Distribution - {seq_id} ({subtype})")
-    plt.xlabel(f"Window Position (size={window_size})", fontsize=22)
+    plt.xlabel(f"Window Position (size={window_size})", fontsize=28)
     
     # 添加位置标记
     seq_length = len(sequence) - window_size + 1
     step = 50
     positions = range(0, seq_length, step)
-    plt.xticks(positions, positions, fontsize=22, rotation=45)  # Rotate X-axis labels by 45 degrees
-    
+    plt.xticks(positions, positions, fontsize=28, rotation=45)  # Rotate X-axis labels by 45 degrees
+    plt.gca().margins(x=0.02)
     # 添加重要区域标注
     threshold = np.percentile(window_importance, 90)
     important_regions = np.where(window_importance > threshold)[0]
@@ -142,7 +142,7 @@ def visualize_importance(sequence, window_importance, seq_id, subtype, output_di
         plt.axvspan(current_start, current_end, color='blue', alpha=0.3)
     
     output_file = os.path.join(output_dir, f"{subtype}_{seq_id}_importance.png")
-    plt.tight_layout()
+    plt.tight_layout(pad=2.0)
     plt.savefig(output_file, dpi=800, bbox_inches='tight')
     plt.close()
     
@@ -232,3 +232,70 @@ def generate_summary_report(subtype_patterns, output_dir):
             f.write("\n")
     
     print(f"已生成汇总报告: {report_file}")
+
+def main():
+    model_path = "/root/autodl-tmp/ViraLM/DNABERT2_new_class10_virus_classification_model"
+    test_fasta_file = "./data/data/class_10_new/test_sequences_10.fasta"
+    test_label_file = "./data/data/class_10_new/test_labels_10.csv"
+    output_dir = "./feature_importance_results_window_test"
+    target_subtypes = ['H5N1',"H5N8","H13N6"]
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"使用设备: {device}")
+    
+    print("加载模型和tokenizer...")
+    config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
+    model = AutoModelForSequenceClassification.from_pretrained(
+        model_path,
+        config=config,
+        trust_remote_code=True
+    ).to(device)
+    tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+    
+    print("加载测试数据...")
+    sequences, labels, seq_ids, label_to_idx = load_data(test_fasta_file, test_label_file)
+    
+    # 创建字典来存储每个亚型的序列
+    subtype_sequences = {}
+    for i, (sequence, label, seq_id) in enumerate(zip(sequences, labels, seq_ids)):
+        subtype = [k for k, v in label_to_idx.items() if v == label][0]
+        if subtype in target_subtypes:
+            if subtype not in subtype_sequences:
+                subtype_sequences[subtype] = []
+            subtype_sequences[subtype].append((sequence, label, seq_id))
+    
+    test_sequences = []
+    test_labels = []
+    test_seq_ids = []
+    
+    # 设置随机种子以确保结果可重复
+    np.random.seed(42)
+    
+    for subtype in target_subtypes:
+        if subtype in subtype_sequences:
+            available_sequences = subtype_sequences[subtype]
+            if len(available_sequences) >= 8:
+                # 随机选择8条序列
+                selected_indices = np.random.choice(len(available_sequences), 8, replace=False)
+                for idx in selected_indices:
+                    sequence, label, seq_id = available_sequences[idx]
+                    test_sequences.append(sequence)
+                    test_labels.append(label)
+                    test_seq_ids.append(seq_id)
+                    print(f"随机选择亚型 {subtype} 的序列: {seq_id}")
+            else:
+                print(f"警告：亚型 {subtype} 的序列数量不足8条（仅有 {len(available_sequences)} 条）")
+    
+    print("\n开始特征重要性分析...")
+    model.eval()
+    subtype_patterns = analyze_sequences(
+        test_sequences, test_labels, test_seq_ids,
+        model, tokenizer, label_to_idx,
+        output_dir, device
+    )
+    
+    generate_summary_report(subtype_patterns, output_dir)
+    print("分析完成！")
+
+if __name__ == "__main__":
+    main()
